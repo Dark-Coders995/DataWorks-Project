@@ -1,16 +1,11 @@
 import sqlite3
 import subprocess
-from dateutil.parser import parse
 from datetime import datetime
 import json
 from pathlib import Path
 import os
 from fastapi import HTTPException
-import requests
-from scipy.spatial.distance import cosine
-from dotenv import load_dotenv
 
-load_dotenv()
 
 AIPROXY_TOKEN = os.getenv('AIPROXY_TOKEN')
 

@@ -2,10 +2,8 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from tasksA import *
-from tasksB import *
-import requests
-from dotenv import load_dotenv
+from taskA import *
+from taskB import *
 import os
 import re
 import httpx
@@ -27,7 +25,6 @@ app.add_middleware(
 
 
 app = FastAPI()
-load_dotenv()
 
 @app.get("/ask")
 def ask(prompt: str):
