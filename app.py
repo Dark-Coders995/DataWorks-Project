@@ -1,9 +1,28 @@
+# app.py
+# /// script
+# dependencies = [
+#   "requests",
+#   "fastapi",
+#   "uvicorn",
+#   "python-dateutil",
+#   "pandas",
+#   "db-sqlite3",
+#   "scipy",
+#   "pybase64",
+#   "python-dotenv",
+#   "httpx",
+#   "markdown",
+#   "duckdb"
+# ]
+# ///
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from taskA import *
-from taskB import *
+from tasksA import *
+from tasksB import *
+import requests
+from dotenv import load_dotenv
 import os
 import re
 import httpx
@@ -25,13 +44,50 @@ app.add_middleware(
 
 
 app = FastAPI()
+load_dotenv()
+
+# @app.get('/ask')
+# def ask(prompt: str):
+#     """ Prompt Gemini to generate a response based on the given prompt. """
+#     gemini_api_key = os.getenv('gemini_api_key')
+#     if not gemini_api_key:
+#         return JSONResponse(content={"error": "GEMINI_API_KEY not set"}, status_code=500)
+
+#     # Read the contents of tasks.py
+#     with open('tasks.py', 'r') as file:
+#         tasks_content = file.read()
+
+#     # Prepare the request data
+#     data = {
+#         "contents": [{
+#             "parts": [
+#                 {"text": f"Find the task function from here for the below prompt:\n{tasks_content}\n\nPrompt: {prompt}\n\n respond with the function_name and function_parameters with parameters in json format"},
+#             ]
+#         }]
+#     }
+
+#     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
+#     headers = {
+#         "Content-Type": "application/json"
+#     }
+
+#     response = requests.post(url, json=data, headers=headers)
+
+#     if response.status_code == 200:
+#         text_reponse = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+#         match = re.search(r'```json\n(.*?)\n```', text_reponse, re.DOTALL)
+#         text_reponse = match.group(1).strip() if match else text_reponse
+#         return json.loads(text_reponse)
+#         # return JSONResponse(content=response.json(), status_code=200)
+#     else:
+#         return JSONResponse(content={"error": "Failed to get response", "details": response.text}, status_code=response.status_code)
 
 @app.get("/ask")
 def ask(prompt: str):
     result = get_completions(prompt)
     return result
 
-openai_api_chat  = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions" 
+openai_api_chat  = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions" # for testing
 openai_api_key = os.getenv("API_KEY")
 
 headers = {
@@ -39,10 +95,14 @@ headers = {
     "Content-Type": "application/json",
 }
 
+
 function_definitions_llm = [
     {
         "name": "A1",
-        "description": "Run a Python script from a given URL, passing an email as the argument.",
+        "description": """
+Install `uv` (if required) and run the script `https://raw.githubusercontent.com/sanand0/tools-in-data-science-public/tds-2025-01/datagen.py`
+with `{email}` as the only argument
+""",
         "parameters": {
             "type": "object",
             "properties": {
@@ -55,7 +115,9 @@ function_definitions_llm = [
     },
     {
         "name": "A2",
-        "description": "Format a markdown file using a specified version of Prettier.",
+        "description": """
+Format the contents of `{file}` using `prettier@3.4.2`, updating the file in-place
+""",
         "parameters": {
             "type": "object",
             "properties": {
@@ -67,7 +129,7 @@ function_definitions_llm = [
     },
     {
         "name": "A3",
-        "description": "Count the number of occurrences of a specific weekday in a date file.",
+        "description": "The file `/data/dates.txt` contains a list of dates, one per line. Count the number of Wednesdays in the list, and write just the number to `/data/dates-wednesdays.txt`",
         "parameters": {
             "type": "object",
             "properties": {
@@ -80,7 +142,7 @@ function_definitions_llm = [
     },
     {
         "name": "A4",
-        "description": "Sort a JSON contacts file and save the sorted version to a target file.",
+        "description": "Sort the array of contacts in `/data/contacts.json` by `last_name`, then `first_name`, and write the result to `/data/contacts-sorted.json`",
         "parameters": {
             "type": "object",
             "properties": {
@@ -98,19 +160,19 @@ function_definitions_llm = [
     },
     {
         "name": "A5",
-        "description": "Retrieve the most recent log files from a directory and save their content to an output file.",
+        "description": "Write the first line of the 10 most recent `.log` file in `/data/logs/` to `/data/logs-recent.txt`, most recent first",
         "parameters": {
             "type": "object",
             "properties": {
                 "log_dir_path": {
                     "type": "string",
                     "pattern": r".*/logs",
-                    "default": "/home/sudip/project-1/data/logs"
+                    "default": "data/logs"
                 },
                 "output_file_path": {
                     "type": "string",
                     "pattern": r".*/(.*\.txt)",
-                    "default": "/home/sudip/project-1/data/logs-recent.txt"
+                    "default": "data/logs-recent.txt"
                 },
                 "num_files": {
                     "type": "integer",
@@ -123,19 +185,23 @@ function_definitions_llm = [
     },
     {
         "name": "A6",
-        "description": "Generate an index of documents from a directory and save it as a JSON file.",
+        "description":  """Find all Markdown (`.md`) files in `/data/docs/`.
+For each file, extract the first occurrance of each H1 (i.e. a line starting with `# `).
+Create an index file `/data/docs/index.json` that maps each filename (without the `/data/docs/` prefix) to its title
+(e.g. `{"README.md": "Home", "path/to/large-language-models.md": "Large Language Models", ...}`)"""
+,
         "parameters": {
             "type": "object",
             "properties": {
                 "doc_dir_path": {
                     "type": "string",
                     "pattern": r".*/docs",
-                    "default": "/home/sudip/project-1/data/docs"
+                    "default": "data/docs"
                 },
                 "output_file_path": {
                     "type": "string",
                     "pattern": r".*/(.*\.json)",
-                    "default": "/home/sudip/project-1/data/docs/index.json"
+                    "default": "data/docs/index.json"
                 }
             },
             "required": ["doc_dir_path", "output_file_path"]
@@ -143,19 +209,19 @@ function_definitions_llm = [
     },
     {
         "name": "A7",
-        "description": "Extract the sender's email address from a text file and save it to an output file.",
+        "description":  "`/data/email.txt` contains an email message. Pass the content to an LLM with instructions to extract the sender's email address, and write just the email address to `/data/email-sender.txt`",
         "parameters": {
             "type": "object",
             "properties": {
                 "filename": {
                     "type": "string",
                     "pattern": r".*/(.*\.txt)",
-                    "default": "/home/sudip/project-1/data/email.txt"
+                    "default": "data/email.txt"
                 },
                 "output_file": {
                     "type": "string",
                     "pattern": r".*/(.*\.txt)",
-                    "default": "/home/sudip/project-1/data/email-sender.txt"
+                    "default": "data/email-sender.txt"
                 }
             },
             "required": ["filename", "output_file"]
@@ -163,19 +229,19 @@ function_definitions_llm = [
     },
     {
         "name": "A8",
-        "description": "Generate an image representation of credit card details from a text file.",
+        "description":  "`/data/credit_card.png` contains a credit card number. Pass the image to an LLM, have it extract the card number, and write it without spaces to `/data/credit-card.txt`",
         "parameters": {
             "type": "object",
             "properties": {
                 "filename": {
                     "type": "string",
                     "pattern": r".*/(.*\.txt)",
-                    "default": "/home/sudip/project-1/data/credit-card.txt"
+                    "default": "data/credit-card.txt"
                 },
                 "image_path": {
                     "type": "string",
                     "pattern": r".*/(.*\.png)",
-                    "default": "/home/sudip/project-1/data/credit-card.png"
+                    "default": "data/credit-card.png"
                 }
             },
             "required": ["filename", "image_path"]
@@ -183,19 +249,20 @@ function_definitions_llm = [
     },
     {
         "name": "A9",
-        "description": "Find similar comments from a text file and save them to an output file.",
+        "description":  "`/data/comments.txt` contains a list of comments, one per line. Using embeddings, find the most similar pair of comments and write them to `/data/comments-similar.txt`, one per line"
+,
         "parameters": {
             "type": "object",
             "properties": {
                 "filename": {
                     "type": "string",
                     "pattern": r".*/(.*\.txt)",
-                    "default": "/home/sudip/project-1/data/comments.txt"
+                    "default": "data/comments.txt"
                 },
                 "output_filename": {
                     "type": "string",
                     "pattern": r".*/(.*\.txt)",
-                    "default": "/home/sudip/project-1/data/comments-similar.txt"
+                    "default": "data/comments-similar.txt"
                 }
             },
             "required": ["filename", "output_filename"]
@@ -203,19 +270,20 @@ function_definitions_llm = [
     },
     {
         "name": "A10",
-        "description": "Identify high-value (gold) ticket sales from a database and save them to a text file.",
+        "description":  'The SQLite database file `/data/ticket-sales.db` has a `tickets` with columns `type`, `units`, and `price`. Each row is a customer bid for a concert ticket. What is the total sales of all the items in the "Gold" ticket type? Write the number in `/data/ticket-sales-gold.txt`'
+,
         "parameters": {
             "type": "object",
             "properties": {
                 "filename": {
                     "type": "string",
                     "pattern": r".*/(.*\.db)",
-                    "default": "/home/sudip/project-1/data/ticket-sales.db"
+                    "default": "data/ticket-sales.db"
                 },
                 "output_filename": {
                     "type": "string",
                     "pattern": r".*/(.*\.txt)",
-                    "default": "/home/sudip/project-1/data/ticket-sales-gold.txt"
+                    "default": "data/ticket-sales-gold.txt"
                 },
                 "query": {
                     "type": "string",
